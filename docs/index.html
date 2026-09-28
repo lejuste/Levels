@@ -1,0 +1,1465 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Levels — A volume for every app on your Mac</title>
+<meta name="description" content="Levels is a small menu bar app that gives every app on your Mac its own volume slider. Turn down a call without muting your music. For macOS 15 Sequoia and later.">
+<meta name="theme-color" content="#07080b">
+<meta property="og:title" content="Levels — A volume for every app on your Mac">
+<meta property="og:description" content="Turn down a noisy call without muting your music. Levels lives in your menu bar and gives each app its own volume slider.">
+<meta property="og:image" content="assets/icon.png">
+<link rel="icon" href="assets/favicon.png">
+<link rel="apple-touch-icon" href="assets/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #07080b;
+  --bg-2: #0c0e13;
+  --card: rgba(255,255,255,.035);
+  --card-2: rgba(255,255,255,.06);
+  --line: rgba(255,255,255,.08);
+  --line-2: rgba(255,255,255,.14);
+  --text: #f5f6f8;
+  --muted: #a3a9b5;
+  --dim: #6d7380;
+  --orange: #ff9f2e;
+  --orange-2: #ffc47a;
+  --blue: #0a84ff;
+  --green: #30d158;
+  --radius: 24px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+  --display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", system-ui, sans-serif;
+  --ease: cubic-bezier(.2,.8,.2,1);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg); color: var(--text); font-family: var(--font);
+  -webkit-font-smoothing: antialiased; line-height: 1.5; overflow-x: hidden;
+}
+img { display: block; max-width: 100%; }
+a { color: inherit; text-decoration: none; }
+button { font: inherit; color: inherit; }
+::selection { background: rgba(255,159,46,.35); }
+
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+@media (max-width: 600px) { .wrap { padding: 0 16px; } }
+
+/* ---------- Progress + nav ---------- */
+.progress { position: fixed; inset: 0 0 auto 0; height: 2px; z-index: 60; transform-origin: 0 50%; transform: scaleX(0);
+  background: linear-gradient(90deg, var(--orange), var(--orange-2)); }
+.nav { position: fixed; inset: 0 0 auto 0; z-index: 50; transition: background .3s, border-color .3s, backdrop-filter .3s;
+  border-bottom: 1px solid transparent; }
+.nav.scrolled { background: rgba(7,8,11,.72); backdrop-filter: blur(18px) saturate(160%); -webkit-backdrop-filter: blur(18px) saturate(160%); border-color: var(--line); }
+.nav .wrap { display: flex; align-items: center; height: 64px; gap: 32px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; letter-spacing: -.01em; }
+.brand img { width: 30px; height: 30px; border-radius: 7px; }
+.nav-links { display: flex; gap: 26px; margin-left: auto; font-size: 14px; color: var(--muted); }
+.nav-links a { transition: color .2s; }
+.nav-links a:hover { color: var(--text); }
+@media (max-width: 760px) { .nav-links { display: none; } .nav .btn { margin-left: auto; } }
+
+/* ---------- Buttons ---------- */
+.btn { position: relative; display: inline-flex; align-items: center; gap: 10px; height: 52px; padding: 0 26px; border-radius: 999px;
+  font-weight: 600; font-size: 16px; letter-spacing: -.01em; white-space: nowrap; cursor: pointer; border: 0;
+  transition: transform .25s var(--ease), box-shadow .3s, background .3s; }
+.btn svg { width: 18px; height: 18px; flex: none; }
+.btn-primary { color: #1b1206;
+  background: linear-gradient(180deg, #ffb957 0%, #ff9420 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.55), inset 0 -1px 0 rgba(0,0,0,.15), 0 10px 30px -8px rgba(255,148,32,.55), 0 0 0 1px rgba(255,170,70,.4); }
+.btn-primary:hover { box-shadow: inset 0 1px 0 rgba(255,255,255,.6), inset 0 -1px 0 rgba(0,0,0,.15), 0 16px 44px -8px rgba(255,148,32,.8), 0 0 0 1px rgba(255,190,110,.6); }
+.btn-primary:active { transform: scale(.97); }
+.btn-primary .arrow { transition: transform .3s var(--ease); }
+.btn-primary:hover .arrow { transform: translateY(2px); }
+.btn-ghost { background: rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px var(--line-2); color: var(--text); }
+.btn-ghost:hover { background: rgba(255,255,255,.1); }
+.btn-sm { height: 38px; padding: 0 16px; font-size: 14px; }
+.btn-sm svg { width: 15px; height: 15px; }
+
+/* ---------- Hero ---------- */
+.hero .wrap, .nav .wrap { max-width: 1280px; }
+.hero { position: relative; padding: 132px 0 40px; min-height: 100vh; overflow: hidden; isolation: isolate; }
+.hero-glow { position: absolute; inset: -20% -10% auto; height: 120%; z-index: -2; pointer-events: none;
+  background:
+    radial-gradient(40% 40% at 78% 30%, rgba(255,140,40,.20), transparent 70%),
+    radial-gradient(35% 35% at 20% 20%, rgba(90,100,255,.16), transparent 70%),
+    radial-gradient(50% 40% at 50% 100%, rgba(255,159,46,.08), transparent 70%); }
+#eq { position: absolute; left: 0; right: 0; bottom: 0; height: 42%; z-index: -1; width: 100%; opacity: .4;
+  -webkit-mask-image: linear-gradient(to top, #000 0%, transparent 100%); mask-image: linear-gradient(to top, #000 0%, transparent 100%); }
+.grain { position: fixed; inset: 0; z-index: 100; pointer-events: none; opacity: .05; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+
+.hero-grid { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.2fr); gap: 56px; align-items: center; }
+@media (max-width: 1040px) { .hero-grid { grid-template-columns: 1fr; gap: 48px; } .hero-copy { text-align: center; margin: 0 auto; } .hero-cta, .trust { justify-content: center; } }
+.hero-copy { max-width: 560px; }
+.pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px 6px 8px; border-radius: 999px; font-size: 13px; color: var(--muted);
+  background: rgba(255,255,255,.05); box-shadow: inset 0 0 0 1px var(--line-2); }
+.pill b { color: #1b1206; background: var(--orange); font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; letter-spacing: .02em; }
+h1 { font-family: var(--display); font-size: clamp(44px, 5.6vw, 76px); line-height: 1.0; letter-spacing: -.045em; font-weight: 700; margin: 22px 0 22px; }
+h1 .w { display: inline-block; opacity: 0; transform: translateY(.35em); filter: blur(10px);
+  animation: wordIn .9s var(--ease) forwards; animation-delay: calc(var(--i) * 70ms + 120ms); }
+@keyframes wordIn { to { opacity: 1; transform: none; filter: blur(0); } }
+.grad { background: linear-gradient(100deg, #fff 0%, #ffe0b3 30%, var(--orange) 60%, #ffcf8f 80%, #fff 100%); background-size: 220% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmer 7s linear infinite; }
+h1 .grad.w { animation: wordIn .9s var(--ease) forwards, shimmer 7s linear infinite; animation-delay: calc(var(--i) * 70ms + 120ms), 0s; }
+@keyframes shimmer { from { background-position: 100% 0; } to { background-position: -120% 0; } }
+.lead { font-size: clamp(17px, 1.6vw, 20px); color: var(--muted); line-height: 1.55; max-width: 520px; }
+@media (max-width: 1040px) { .lead { margin: 0 auto; } }
+.hero-cta { display: flex; gap: 12px; margin-top: 34px; flex-wrap: wrap; }
+.hero-meta { margin-top: 16px; font-size: 13px; color: var(--dim); }
+.trust { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 30px; font-size: 13px; color: var(--muted); }
+.trust span { display: inline-flex; align-items: center; gap: 7px; }
+.trust svg { width: 16px; height: 16px; color: var(--green); flex: none; }
+.fade-up { opacity: 0; transform: translateY(16px); animation: fadeUp 1s var(--ease) forwards; animation-delay: var(--d, 0s); }
+@keyframes fadeUp { to { opacity: 1; transform: none; } }
+
+/* ---------- Desktop mock ---------- */
+.desk-wrap { position: relative; perspective: 1600px; }
+.desk { position: relative; width: 100%; border-radius: 18px; overflow: hidden; transform-style: preserve-3d;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.1), 0 40px 120px -30px rgba(0,0,0,.9), 0 30px 80px -40px rgba(255,140,40,.35);
+  transition: transform .6s var(--ease); }
+.desk-stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; overflow: hidden;
+  background:
+    radial-gradient(70% 90% at 0% 100%, #ff8a3d 0%, rgba(255,138,61,0) 55%),
+    radial-gradient(60% 70% at 100% 0%, #5b5bd6 0%, rgba(91,91,214,0) 60%),
+    radial-gradient(60% 60% at 70% 90%, #c2417a 0%, rgba(194,65,122,0) 60%),
+    linear-gradient(160deg, #1d2140 0%, #2b1d44 50%, #40203a 100%);
+  user-select: none; -webkit-user-select: none; }
+.menubar { position: absolute; inset: 0 0 auto; height: 26px; display: flex; align-items: center; padding: 0 10px; gap: 16px;
+  background: rgba(20,16,30,.35); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); font-size: 13px; color: #fff; }
+.menubar .app-name { font-weight: 700; }
+.menubar .mitem { opacity: .92; }
+.menubar .right { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+.mb-ico { height: 22px; min-width: 26px; padding: 0 5px; display: grid; place-items: center; border-radius: 5px; color: #fff; }
+.mb-ico svg { width: 16px; height: 16px; }
+.mb-ico.levels { cursor: pointer; transition: background .15s; }
+.mb-ico.levels.active { background: rgba(255,255,255,.22); }
+.mb-time { padding: 0 6px; font-weight: 500; }
+.compact .menubar .mitem, .compact .mb-ico.extra { display: none; }
+
+.pop { position: absolute; width: 300px; padding: 6px 0; border-radius: 12px; color: #fff; font-size: 13px;
+  background: rgba(38,36,44,.74); backdrop-filter: blur(28px) saturate(180%); -webkit-backdrop-filter: blur(28px) saturate(180%);
+  box-shadow: inset 0 0 0 .5px rgba(255,255,255,.16), 0 0 0 .5px rgba(0,0,0,.6), 0 24px 60px -12px rgba(0,0,0,.65); }
+.desk .pop { top: 32px; opacity: 0; transform: translateY(-6px) scale(.985); transform-origin: 20% 0; pointer-events: none;
+  transition: opacity .2s ease, transform .25s var(--ease); z-index: 3; }
+.desk .pop.open { opacity: 1; transform: none; pointer-events: auto; }
+.pop-title { font-size: 12px; font-weight: 600; color: rgba(255,255,255,.5); padding: 6px 14px 4px; }
+.pop-div { height: 1px; background: rgba(255,255,255,.12); margin: 5px 14px; }
+.mrow { display: flex; align-items: center; justify-content: space-between; height: 24px; padding: 0 9px; margin: 0 5px; border-radius: 5px; }
+.switch { width: 26px; height: 15px; border-radius: 8px; background: var(--blue); position: relative; }
+.switch::after { content: ""; position: absolute; top: 1px; right: 1px; width: 13px; height: 13px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+
+/* App row: a faithful copy of the real one */
+.row { display: flex; align-items: center; gap: 10px; padding: 5px 14px; }
+.appicon { position: relative; width: 24px; height: 24px; flex: none; border: 0; background: none; padding: 0; cursor: pointer; border-radius: 6px; }
+.appicon:focus-visible, .transport:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.appglyph { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 6px;
+  box-shadow: inset 0 0 0 .5px rgba(255,255,255,.25), 0 1px 2px rgba(0,0,0,.35); transition: filter .25s, opacity .25s; }
+.appglyph svg { width: 15px; height: 15px; }
+.appglyph.lg { width: 40px; height: 40px; border-radius: 10px; }
+.appglyph.lg svg { width: 24px; height: 24px; }
+.row.muted .appglyph { filter: grayscale(1) brightness(.75); opacity: .75; }
+.mute-badge { position: absolute; right: -4px; bottom: -4px; width: 14px; height: 14px; border-radius: 50%; display: grid; place-items: center;
+  background: #2c2b31; box-shadow: inset 0 0 0 .5px rgba(255,255,255,.22); transform: scale(0); transition: transform .3s cubic-bezier(.3,1.6,.5,1); }
+.mute-badge svg { width: 9px; height: 9px; }
+.row.muted .mute-badge { transform: scale(1); }
+.slider { position: relative; flex: 1; min-width: 0; height: 22px; border-radius: 11px; background: rgba(255,255,255,.16); cursor: pointer; touch-action: pan-y; outline: none; }
+.slider:focus-visible { box-shadow: 0 0 0 3px rgba(10,132,255,.65); }
+.fill { position: absolute; left: 0; top: 0; bottom: 0; width: 22px; border-radius: 11px; background: #fff; overflow: hidden; transition: background-color .2s; }
+.boost { position: absolute; top: 0; bottom: 0; right: 0; background: #9e9e9e; opacity: 0; transition: opacity .15s; }
+.notch { position: absolute; top: 7px; width: 1.5px; height: 8px; background: rgba(255,255,255,.28); transition: opacity .15s; }
+.knob { position: absolute; left: 0; top: 0; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 .5px 1.5px rgba(0,0,0,.3); transition: background-color .2s; }
+.row.muted .fill, .row.muted .knob { background: #787878; }
+.pct { width: 38px; flex: none; text-align: right; font-size: 11px; color: rgba(255,255,255,.55); font-variant-numeric: tabular-nums; }
+.transport, .transport-spacer { width: 24px; height: 24px; flex: none; }
+.transport { border: 0; border-radius: 50%; background: rgba(255,255,255,.12); display: grid; place-items: center; cursor: pointer; transition: background .15s, transform .15s; }
+.transport:hover { background: rgba(255,255,255,.2); }
+.transport:active { transform: scale(.9); }
+.transport svg { width: 10px; height: 10px; }
+
+/* "What you hear" windows */
+.hear-label { position: absolute; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: rgba(255,255,255,.7); }
+.win { position: absolute; display: flex; align-items: center; gap: 12px; padding: 12px 16px 12px 12px; border-radius: 14px;
+  background: rgba(24,20,34,.5); backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: inset 0 0 0 .5px rgba(255,255,255,.14), 0 12px 30px -12px rgba(0,0,0,.5); color: #fff; }
+.win-meta { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.win-meta b { font-size: 13px; font-weight: 600; }
+.win-meta span { font-size: 11px; color: rgba(255,255,255,.6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meter { display: flex; align-items: center; gap: 3px; height: 40px; flex: none; }
+.meter i { display: block; width: 3px; height: 100%; border-radius: 2px; background: #fff; transform: scaleY(.06); transition: background-color .4s; }
+.meter.boosted i { background: var(--orange); }
+.meter.silent i { background: rgba(255,255,255,.35); }
+
+.cursor { position: absolute; left: 0; top: 0; width: 22px; height: 22px; z-index: 10; pointer-events: none; transition: opacity .3s;
+  filter: drop-shadow(0 2px 3px rgba(0,0,0,.4)); }
+.cursor svg { width: 100%; height: 100%; transition: transform .12s; transform-origin: 3px 2px; }
+.cursor.down svg { transform: scale(.85); }
+.cursor.hide { opacity: 0; }
+.ripple { position: absolute; width: 36px; height: 36px; margin: -18px 0 0 -18px; border-radius: 50%; border: 2px solid rgba(255,255,255,.8); pointer-events: none; z-index: 9;
+  animation: ripple .6s ease-out forwards; }
+@keyframes ripple { from { transform: scale(.3); opacity: 1; } to { transform: scale(1.4); opacity: 0; } }
+
+.demo-caption { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 22px; min-height: 24px; font-size: 15px; color: var(--muted); text-align: center; }
+.demo-caption .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--orange); box-shadow: 0 0 12px var(--orange); flex: none; animation: pulse 1.6s ease-in-out infinite; }
+.demo-caption .txt { transition: opacity .25s, transform .25s; }
+.demo-caption .txt.swap { opacity: 0; transform: translateY(4px); }
+@keyframes pulse { 50% { opacity: .35; transform: scale(.8); } }
+
+/* ---------- Sections ---------- */
+.section { position: relative; padding: 140px 0; }
+@media (max-width: 700px) { .section { padding: 96px 0; } }
+.section-head { max-width: 760px; margin: 0 auto 64px; text-align: center; }
+.kicker { display: inline-block; font-size: 13px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--orange); margin-bottom: 18px; }
+h2 { font-family: var(--display); font-size: clamp(34px, 5vw, 60px); line-height: 1.05; letter-spacing: -.04em; font-weight: 700; }
+h2 .dim, h3 .dim { color: var(--dim); }
+.section-head p.lede { margin-top: 22px; font-size: clamp(17px, 1.5vw, 19px); color: var(--muted); line-height: 1.6; }
+h3 { font-size: 21px; letter-spacing: -.02em; font-weight: 650; line-height: 1.25; }
+
+.card { position: relative; border-radius: var(--radius); background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+  box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; isolation: isolate; }
+.card::before { content: ""; position: absolute; inset: 0; z-index: -1; opacity: 0; transition: opacity .4s; pointer-events: none;
+  background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 50%), rgba(255,159,46,.10), transparent 60%); }
+.card:hover::before { opacity: 1; }
+
+.reveal { opacity: 0; transform: translateY(28px); transition: opacity 1s var(--ease), transform 1s var(--ease); transition-delay: var(--d, 0s); }
+.reveal.in { opacity: 1; transform: none; }
+
+/* Problem */
+.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media (max-width: 900px) { .compare { grid-template-columns: 1fr; } }
+.cmp { padding: 34px; display: flex; flex-direction: column; gap: 26px; }
+@media (max-width: 600px) { .cmp { padding: 22px; } }
+.tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: rgba(255,255,255,.07); color: var(--muted); margin-bottom: 12px; }
+.cmp.good .tag { background: rgba(255,159,46,.14); color: var(--orange); }
+.cmp.good { box-shadow: inset 0 0 0 1px rgba(255,159,46,.25); }
+.cmp.good::after { content: ""; position: absolute; inset: -40% -20% auto auto; width: 70%; height: 90%; z-index: -1; pointer-events: none;
+  background: radial-gradient(closest-side, rgba(255,159,46,.14), transparent); }
+.cmp-foot { color: var(--muted); font-size: 15px; margin-top: auto; }
+.sys { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 14px; background: rgba(0,0,0,.25); box-shadow: inset 0 0 0 1px var(--line); }
+.sys-label { font-size: 12px; font-weight: 600; color: var(--muted); width: 54px; }
+.sysslider { position: relative; flex: 1; height: 22px; border-radius: 11px; background: rgba(255,255,255,.14); overflow: hidden; }
+.sysslider .sfill { position: absolute; inset: 0 auto 0 0; background: #fff; border-radius: 11px; min-width: 22px; }
+.sysslider svg { position: absolute; left: 4px; top: 4px; width: 14px; height: 14px; color: #111; }
+.lines { display: flex; flex-direction: column; gap: 10px; }
+.line { display: flex; align-items: center; gap: 14px; padding: 8px 14px 8px 8px; border-radius: 14px; background: rgba(255,255,255,.03); }
+.line .nm { flex: 1; font-size: 14px; font-weight: 500; }
+.line .nm small { display: block; font-size: 12px; font-weight: 400; color: var(--dim); }
+.line .meter { height: 28px; }
+.mini-pop { position: relative; width: 100%; padding: 6px 0; border-radius: 14px; background: rgba(0,0,0,.28); box-shadow: inset 0 0 0 1px var(--line); }
+.mini-pop .row { padding: 8px 14px; }
+.cmp-lines { display: flex; flex-direction: column; }
+.cmp-line { display: flex; align-items: center; gap: 4px; }
+.cmp-line .row { flex: 1; min-width: 0; padding-right: 6px; }
+.cmp-line .meter { height: 26px; margin-right: 14px; gap: 2.5px; }
+.cmp-line .meter i { width: 2.5px; }
+
+/* How it works */
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+@media (max-width: 900px) { .steps { grid-template-columns: 1fr; } }
+.step { padding: 30px; display: flex; flex-direction: column; gap: 16px; }
+.step-n { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 14px; font-weight: 700; color: #1b1206; background: var(--orange); }
+.step p { color: var(--muted); font-size: 15px; }
+.stage { height: 150px; border-radius: 16px; position: relative; overflow: hidden; display: grid; place-items: center;
+  background: radial-gradient(90% 120% at 0% 100%, rgba(255,138,61,.35), transparent 60%), radial-gradient(80% 100% at 100% 0%, rgba(91,91,214,.35), transparent 60%), #15131f;
+  box-shadow: inset 0 0 0 1px var(--line); }
+.stage .mini-pop { width: calc(100% - 28px); background: rgba(38,36,44,.72); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); box-shadow: inset 0 0 0 .5px rgba(255,255,255,.16), 0 16px 40px -12px rgba(0,0,0,.6); border-radius: 12px; }
+
+.mb-demo { position: absolute; inset: 0 0 auto; height: 28px; display: flex; align-items: center; justify-content: flex-end; gap: 4px; padding: 0 10px;
+  background: rgba(20,16,30,.45); font-size: 12px; color: #fff; }
+.mb-demo .mb-ico { animation: mbActive 4s infinite; }
+.mb-demo .mb-ico.plain { animation: none; }
+@keyframes mbActive { 0%, 32% { background: transparent; } 36%, 90% { background: rgba(255,255,255,.22); } 94%, 100% { background: transparent; } }
+.mb-pop { position: absolute; top: 34px; right: 70px; width: 170px; padding: 10px; border-radius: 10px; display: flex; flex-direction: column; gap: 9px;
+  background: rgba(38,36,44,.8); box-shadow: inset 0 0 0 .5px rgba(255,255,255,.16), 0 16px 30px -10px rgba(0,0,0,.6);
+  transform-origin: 30% 0; animation: mbPop 4s infinite var(--ease); }
+.mb-pop span { display: block; height: 10px; border-radius: 5px; background: rgba(255,255,255,.16); position: relative; overflow: hidden; }
+.mb-pop span::after { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--w); background: #fff; border-radius: 5px; }
+@keyframes mbPop { 0%, 34% { opacity: 0; transform: translateY(-6px) scale(.97); } 40%, 88% { opacity: 1; transform: none; } 94%, 100% { opacity: 0; transform: translateY(-6px) scale(.97); } }
+.mb-cursor { position: absolute; width: 18px; height: 18px; left: 0; top: 0; animation: mbCursor 4s infinite var(--ease); filter: drop-shadow(0 2px 3px rgba(0,0,0,.4)); }
+@keyframes mbCursor { 0% { transform: translate(60px, 110px); } 28%, 34% { transform: translate(calc(var(--iconx) - 3px), 12px); } 31% { transform: translate(calc(var(--iconx) - 3px), 12px) scale(.85); } 60% { transform: translate(calc(var(--iconx) - 10px), 60px); } 100% { transform: translate(60px, 110px); } }
+
+.flow { margin-top: 20px; padding: 44px; display: grid; grid-template-columns: 1fr 1.25fr; gap: 56px; align-items: center; }
+@media (max-width: 900px) { .flow { grid-template-columns: 1fr; padding: 26px; gap: 36px; } }
+.flow h3 { font-size: 26px; margin-bottom: 14px; }
+.flow p { color: var(--muted); font-size: 15px; }
+.flow p + p { margin-top: 12px; }
+.lanes { display: flex; flex-direction: column; gap: 28px; }
+.lane-title { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); margin-bottom: 12px; }
+.lane { display: grid; grid-template-columns: auto 1fr auto 1fr auto; align-items: center; }
+.node { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 78px; text-align: center; font-size: 12px; color: var(--muted); }
+.node .ico { width: 48px; height: 48px; border-radius: 12px; display: grid; place-items: center; background: rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px var(--line-2); }
+.node .ico svg { width: 24px; height: 24px; color: #fff; }
+.node img { width: 48px; height: 48px; border-radius: 12px; }
+.node.levels img { box-shadow: 0 0 0 1px rgba(255,159,46,.5), 0 0 30px rgba(255,159,46,.45); }
+.node .appglyph.lg { width: 48px; height: 48px; border-radius: 12px; }
+.wire { position: relative; height: 2px; margin: 0 6px 26px; border-radius: 2px; background: rgba(255,255,255,.1); overflow: hidden; }
+.wire::after { content: ""; position: absolute; top: 0; bottom: 0; width: 40%; left: -40%;
+  background: linear-gradient(90deg, transparent, var(--c, #fff), transparent); animation: flowPulse var(--t, 1.6s) linear infinite; }
+.wire.after { --c: rgba(255,159,46,.9); height: 2px; }
+.wire.bypass { grid-column: 2 / 5; --t: 2.2s; --c: rgba(255,255,255,.7); }
+@keyframes flowPulse { to { left: 100%; } }
+.fact { display: inline-flex; gap: 8px; align-items: center; margin-top: 18px; padding: 10px 16px; border-radius: 14px; font-size: 13px; color: var(--muted); background: rgba(255,255,255,.05); box-shadow: inset 0 0 0 1px var(--line); }
+.fact b { color: var(--text); font-weight: 600; white-space: nowrap; }
+
+/* Looks */
+.shots { display: flex; flex-direction: column; align-items: center; gap: 30px; }
+.seg { position: relative; display: inline-flex; padding: 4px; border-radius: 999px; background: rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px var(--line); }
+.seg button { position: relative; z-index: 1; border: 0; background: none; height: 36px; padding: 0 22px; border-radius: 999px; font-size: 14px; font-weight: 600; color: var(--muted); cursor: pointer; transition: color .3s; }
+.seg button[aria-selected="true"] { color: #111; }
+.seg-thumb { position: absolute; top: 4px; bottom: 4px; left: 4px; border-radius: 999px; background: #fff; transition: transform .45s var(--ease), width .45s var(--ease); }
+.shot-stage { position: relative; width: min(760px, 100%); aspect-ratio: 16 / 9.5; border-radius: 22px; overflow: hidden; transform-style: preserve-3d; transition: transform .6s var(--ease);
+  box-shadow: 0 0 0 1px rgba(255,255,255,.1), 0 40px 100px -30px rgba(0,0,0,.9); }
+@media (max-width: 600px) { .shot-stage { aspect-ratio: 4 / 4.2; } }
+.shot-bg { position: absolute; inset: 0; transition: opacity .7s ease; }
+.shot-bg.light { background: radial-gradient(70% 90% at 0% 100%, #ffc58f, transparent 60%), radial-gradient(70% 80% at 100% 0%, #9fb8ff, transparent 60%), linear-gradient(160deg, #e9ecf7, #f7e6ee); }
+.shot-bg.dark { background: radial-gradient(70% 90% at 0% 100%, rgba(255,138,61,.55), transparent 60%), radial-gradient(70% 80% at 100% 0%, rgba(91,91,214,.7), transparent 60%), linear-gradient(160deg, #141629, #24162e); opacity: 0; }
+.shot-bar { position: absolute; inset: 0 0 auto; height: 28px; background: rgba(255,255,255,.35); backdrop-filter: blur(10px); transition: background .7s; }
+.shot-stage[data-mode="dark"] .shot-bar { background: rgba(0,0,0,.3); }
+.shot-stage[data-mode="dark"] .shot-bg.dark { opacity: 1; }
+.shot { position: absolute; top: 0; left: 50%; width: 312px; max-width: 78%; transform: translate(-50%, 0); transition: opacity .6s ease, transform .7s var(--ease);
+  filter: drop-shadow(0 30px 40px rgba(0,0,0,.35)); }
+.shot.dark { width: 308px; opacity: 0; transform: translate(-50%, 10px) scale(.98); }
+.shot-stage[data-mode="dark"] .shot.light { opacity: 0; transform: translate(-50%, 10px) scale(.98); }
+.shot-stage[data-mode="dark"] .shot.dark { opacity: 1; transform: translate(-50%, 0); }
+.shot-note { font-size: 13px; color: var(--dim); }
+
+/* Features bento */
+.bento { display: grid; grid-template-columns: repeat(6, 1fr); gap: 20px; }
+.feat { grid-column: span 2; padding: 28px; display: flex; flex-direction: column; gap: 12px; min-height: 300px; }
+.feat.wide { grid-column: span 3; }
+.feat.full { grid-column: 1 / -1; min-height: 0; flex-direction: row; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+@media (max-width: 1000px) { .bento { grid-template-columns: repeat(2, 1fr); } .feat, .feat.wide { grid-column: span 1; } }
+@media (max-width: 640px) { .bento { grid-template-columns: 1fr; } .feat { min-height: 0; } }
+.feat p { color: var(--muted); font-size: 15px; }
+.feat .viz { margin-top: auto; padding-top: 18px; min-height: 110px; display: flex; align-items: center; justify-content: center; }
+.feat .mini-pop { background: rgba(38,36,44,.6); }
+.chips { display: flex; flex-wrap: wrap; gap: 10px; }
+.chip { display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 999px; font-size: 14px; font-weight: 500; background: rgba(255,255,255,.05); box-shadow: inset 0 0 0 1px var(--line-2); }
+.chip svg { width: 16px; height: 16px; color: var(--orange); }
+
+.memory { width: 100%; display: flex; flex-direction: column; gap: 8px; position: relative; }
+.memory .mline { display: flex; align-items: center; gap: 10px; font-size: 13px; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,.04); animation: memBlink 4s infinite; animation-delay: var(--d); }
+.memory .mline .appglyph { width: 20px; height: 20px; border-radius: 5px; }
+.memory .mline .appglyph svg { width: 12px; height: 12px; }
+.memory .mline b { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 600; }
+.memory .mline .ok { width: 16px; height: 16px; color: var(--green); opacity: 0; animation: memOk 4s infinite; animation-delay: var(--d); }
+@keyframes memBlink { 0%, 40% { opacity: 1; } 48% { opacity: .15; } 60%, 100% { opacity: 1; } }
+@keyframes memOk { 0%, 58% { opacity: 0; transform: scale(.5); } 64%, 92% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+.restart { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--dim); margin-bottom: 4px; }
+.restart svg { width: 14px; height: 14px; animation: spin 4s infinite var(--ease); }
+@keyframes spin { 0%, 38% { transform: rotate(0); } 55%, 100% { transform: rotate(360deg); } }
+
+.np { position: relative; width: 100%; }
+.np-tip { position: absolute; right: 0; bottom: calc(100% + 8px); padding: 8px 12px; border-radius: 8px; font-size: 12px; line-height: 1.35;
+  background: rgba(50,48,56,.95); box-shadow: inset 0 0 0 .5px rgba(255,255,255,.2), 0 10px 24px rgba(0,0,0,.5); white-space: nowrap; transition: opacity .3s, transform .3s; }
+.np-tip small { color: rgba(255,255,255,.55); }
+
+.devices { display: flex; flex-direction: column; align-items: center; gap: 14px; width: 100%; }
+.dev { display: inline-flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: 12px; background: rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px var(--line-2); font-size: 14px; font-weight: 500; min-width: 210px; }
+.dev svg { width: 20px; height: 20px; color: var(--orange); }
+.dev .dn { transition: opacity .25s, transform .25s; }
+.dev .dn.swap { opacity: 0; transform: translateY(4px); }
+.dev-arrow { font-size: 12px; color: var(--dim); display: flex; align-items: center; gap: 6px; }
+
+.away { width: 100%; display: flex; flex-direction: column; gap: 10px; }
+.away .mb-strip { height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: flex-end; gap: 4px; padding: 0 8px; background: rgba(20,16,30,.6); box-shadow: inset 0 0 0 1px var(--line); font-size: 12px; }
+.away .mb-strip .mb-ico.levels { background: rgba(255,159,46,.2); color: var(--orange); }
+.away .mrow { margin: 0; padding: 0 10px; height: 34px; border-radius: 8px; background: rgba(255,255,255,.04); font-size: 13px; }
+.away .switch { background: rgba(255,255,255,.2); transition: background .3s; animation: swBg 4s infinite; }
+.away .switch::after { right: auto; left: 1px; animation: swKnob 4s infinite var(--ease); }
+@keyframes swBg { 0%, 30% { background: rgba(255,255,255,.2); } 40%, 90% { background: var(--blue); } 100% { background: rgba(255,255,255,.2); } }
+@keyframes swKnob { 0%, 30% { transform: none; } 40%, 90% { transform: translateX(11px); } 100% { transform: none; } }
+
+.upd { position: relative; width: 100%; height: 56px; }
+.upd > div { position: absolute; inset: 0; display: flex; align-items: center; gap: 12px; padding: 0 16px; border-radius: 14px; background: rgba(255,255,255,.05); box-shadow: inset 0 0 0 1px var(--line-2); font-size: 14px; }
+.upd img { width: 28px; height: 28px; border-radius: 7px; }
+.upd .a { animation: updA 5s infinite; }
+.upd .b { animation: updB 5s infinite; }
+.upd .spin { width: 16px; height: 16px; margin-left: auto; border-radius: 50%; border: 2px solid rgba(255,255,255,.2); border-top-color: var(--orange); animation: rot .8s linear infinite; }
+.upd .ok { width: 18px; height: 18px; margin-left: auto; color: var(--green); }
+@keyframes rot { to { transform: rotate(360deg); } }
+@keyframes updA { 0%, 45% { opacity: 1; transform: none; } 52%, 95% { opacity: 0; transform: translateY(-6px); } 100% { opacity: 1; } }
+@keyframes updB { 0%, 45% { opacity: 0; transform: translateY(6px); } 52%, 95% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+
+/* Privacy */
+.safe-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 20px; align-items: stretch; }
+@media (max-width: 960px) { .safe-grid { grid-template-columns: 1fr; } }
+.safe-list { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media (max-width: 600px) { .safe-list { grid-template-columns: 1fr; } }
+.safe { padding: 26px; display: flex; flex-direction: column; gap: 10px; }
+.safe .ico { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: rgba(48,209,88,.1); box-shadow: inset 0 0 0 1px rgba(48,209,88,.25); margin-bottom: 6px; }
+.safe .ico svg { width: 22px; height: 22px; color: var(--green); }
+.safe h3 { font-size: 17px; }
+.safe p { color: var(--muted); font-size: 14px; }
+.perm { padding: 38px; display: flex; flex-direction: column; gap: 22px; }
+@media (max-width: 600px) { .perm { padding: 24px; } }
+.perm h3 { font-size: 24px; }
+.perm > p { color: var(--muted); font-size: 15px; }
+.alert { align-self: center; width: min(300px, 100%); padding: 22px 18px 16px; border-radius: 14px; text-align: center; color: #fff;
+  background: rgba(46,44,52,.9); box-shadow: inset 0 0 0 .5px rgba(255,255,255,.18), 0 30px 70px -20px rgba(0,0,0,.8); font-size: 13px; margin: 8px 0; }
+.alert img { width: 60px; height: 60px; margin: 0 auto 12px; border-radius: 13px; }
+.alert b { display: block; font-size: 13px; margin-bottom: 6px; }
+.alert p { font-size: 11.5px; color: rgba(255,255,255,.75); line-height: 1.45; }
+.alert .btns { display: flex; gap: 8px; margin-top: 16px; }
+.alert .btns span { flex: 1; height: 28px; display: grid; place-items: center; border-radius: 7px; background: rgba(255,255,255,.14); font-size: 13px; }
+.alert .btns span.allow { background: var(--blue); animation: allowPulse 2.4s infinite; }
+@keyframes allowPulse { 0%, 70%, 100% { box-shadow: 0 0 0 0 rgba(10,132,255,.0); } 80% { box-shadow: 0 0 0 6px rgba(10,132,255,.35); } }
+.perm ul { list-style: none; display: flex; flex-direction: column; gap: 10px; font-size: 14px; color: var(--muted); }
+.perm li { display: flex; gap: 10px; }
+.perm li svg { width: 18px; height: 18px; color: var(--green); flex: none; margin-top: 1px; }
+
+/* Install */
+.install { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+@media (max-width: 900px) { .install { grid-template-columns: 1fr; } }
+.inst { padding: 28px; display: flex; flex-direction: column; gap: 14px; }
+.inst p { color: var(--muted); font-size: 15px; }
+.inst .stage { height: 170px; }
+.dmg { display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.dmg-file { width: 64px; height: 76px; border-radius: 8px; position: relative; display: grid; place-items: center;
+  background: linear-gradient(180deg, #f1f1f4, #cfd0d6); box-shadow: 0 10px 24px rgba(0,0,0,.4); animation: dmgIn 3s infinite var(--ease); }
+.dmg-file img { width: 38px; height: 38px; border-radius: 8px; }
+.dmg-arrow { position: absolute; top: -28px; left: 50%; width: 20px; height: 20px; margin-left: -10px; color: var(--orange); animation: dmgArrow 3s infinite var(--ease); }
+@keyframes dmgIn { 0% { transform: translateY(-20px); opacity: 0; } 25%, 85% { transform: none; opacity: 1; } 100% { opacity: 0; } }
+@keyframes dmgArrow { 0% { transform: translateY(-10px); opacity: 0; } 15% { opacity: 1; } 30% { transform: translateY(10px); opacity: 0; } 100% { opacity: 0; } }
+.finder { width: calc(100% - 36px); max-width: 300px; height: 118px; border-radius: 12px; position: relative; background: rgba(240,240,244,.95); box-shadow: 0 20px 40px -12px rgba(0,0,0,.6); overflow: hidden; }
+.finder .tb { height: 22px; display: flex; align-items: center; gap: 5px; padding: 0 9px; background: rgba(0,0,0,.05); }
+.finder .tb i { width: 8px; height: 8px; border-radius: 50%; background: #ff5f57; }
+.finder .tb i:nth-child(2) { background: #febc2e; } .finder .tb i:nth-child(3) { background: #28c840; }
+.finder .items { position: relative; height: 96px; }
+.f-app, .f-apps { position: absolute; top: 14px; width: 60px; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 10px; color: #333; }
+.f-app { left: 18%; animation: dragApp 3.4s infinite var(--ease); z-index: 2; }
+.f-app img { width: 44px; height: 44px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,.25); }
+.f-apps { right: 18%; }
+.f-apps .folder { width: 50px; height: 42px; margin-top: 2px; border-radius: 6px; position: relative; background: linear-gradient(180deg, #7cc0ff, #3d97ff); animation: folderHi 3.4s infinite; }
+.f-apps .folder::before { content: ""; position: absolute; left: 0; top: -5px; width: 20px; height: 8px; border-radius: 3px 3px 0 0; background: #5aaaff; }
+.f-apps .folder svg { position: absolute; inset: 9px 13px; width: 24px; height: 24px; color: rgba(255,255,255,.9); }
+@keyframes dragApp { 0%, 15% { transform: none; opacity: 1; } 55% { transform: translateX(calc(var(--dx) * 1px)) scale(.9); opacity: .9; } 62% { transform: translateX(calc(var(--dx) * 1px)) scale(.3); opacity: 0; } 85% { transform: none; opacity: 0; } 100% { transform: none; opacity: 1; } }
+@keyframes folderHi { 0%, 45% { filter: none; } 52%, 62% { filter: brightness(1.2) drop-shadow(0 0 8px rgba(61,151,255,.8)); } 70%, 100% { filter: none; } }
+.req { margin-top: 30px; text-align: center; color: var(--muted); font-size: 14px; }
+.req b { color: var(--text); font-weight: 600; }
+
+/* FAQ */
+.faq { max-width: 820px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+.faq details { border-radius: 18px; background: rgba(255,255,255,.035); box-shadow: inset 0 0 0 1px var(--line); transition: background .3s; }
+.faq details[open] { background: rgba(255,255,255,.055); }
+.faq summary { list-style: none; cursor: pointer; padding: 22px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; font-weight: 600; font-size: 17px; letter-spacing: -.01em; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary .pm { width: 26px; height: 26px; flex: none; border-radius: 50%; background: rgba(255,255,255,.07); position: relative; transition: transform .4s var(--ease), background .3s; }
+.faq summary .pm::before, .faq summary .pm::after { content: ""; position: absolute; left: 8px; right: 8px; top: 12px; height: 2px; border-radius: 1px; background: var(--text); }
+.faq summary .pm::after { transform: rotate(90deg); transition: transform .4s var(--ease); }
+.faq details[open] .pm { transform: rotate(180deg); background: rgba(255,159,46,.2); }
+.faq details[open] .pm::after { transform: rotate(0); }
+.faq .ans { overflow: hidden; }
+.faq .ans p { padding: 0 24px 22px; color: var(--muted); font-size: 15px; line-height: 1.65; }
+.faq .ans b { color: var(--text); font-weight: 600; }
+
+/* Final CTA */
+.final { text-align: center; padding: 160px 0 140px; position: relative; overflow: hidden; isolation: isolate; }
+.final::before { content: ""; position: absolute; left: 50%; top: 38%; width: 900px; height: 600px; transform: translate(-50%, -50%); z-index: -1;
+  background: radial-gradient(closest-side, rgba(255,159,46,.22), transparent); }
+.final-icon { width: 128px; height: 128px; margin: 0 auto 36px; border-radius: 29px; box-shadow: 0 30px 80px -20px rgba(255,159,46,.6), 0 0 0 1px rgba(255,255,255,.08); animation: float 6s ease-in-out infinite; }
+@keyframes float { 50% { transform: translateY(-10px) rotate(-2deg); } }
+.final h2 { font-size: clamp(40px, 6vw, 76px); }
+.final p { margin: 20px auto 36px; color: var(--muted); font-size: 18px; max-width: 520px; }
+.final p.hero-meta { margin: 18px auto 0; font-size: 13px; color: var(--dim); }
+
+footer { border-top: 1px solid var(--line); padding: 36px 0 48px; color: var(--dim); font-size: 13px; }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 16px 28px; align-items: center; justify-content: space-between; }
+footer nav { display: flex; gap: 22px; flex-wrap: wrap; }
+footer a:hover { color: var(--text); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001s !important; animation-iteration-count: 1 !important; transition-duration: .001s !important; }
+  h1 .w, .fade-up { opacity: 1; transform: none; filter: none; }
+  .reveal { opacity: 1; transform: none; }
+  html { scroll-behavior: auto; }
+}
+</style>
+</head>
+<body>
+<div class="progress" id="progress"></div>
+<div class="grain" aria-hidden="true"></div>
+
+<header class="nav" id="nav">
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="assets/icon.png" alt="">Levels</a>
+    <nav class="nav-links" aria-label="Sections">
+      <a href="#how">How it works</a>
+      <a href="#features">Features</a>
+      <a href="#privacy">Privacy</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <a class="btn btn-primary btn-sm" data-dl href="https://github.com/lejuste/Levels/releases/latest">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/></svg>Download
+    </a>
+  </div>
+</header>
+
+<main id="top">
+<!-- ================= HERO ================= -->
+<section class="hero">
+  <div class="hero-glow" aria-hidden="true"></div>
+  <canvas id="eq" aria-hidden="true"></canvas>
+  <div class="wrap hero-grid">
+    <div class="hero-copy">
+      <span class="pill fade-up" style="--d:.05s"><b>macOS</b> A menu bar app for Sequoia and later</span>
+      <h1 id="h1">A volume knob for every app on your Mac.</h1>
+      <p class="lead fade-up" style="--d:.6s">Turn down a loud video call without muting your music. Boost a quiet video without blasting your notifications. Levels sits in your menu bar and gives every app that's playing sound its own slider.</p>
+      <div class="hero-cta fade-up" style="--d:.75s">
+        <a class="btn btn-primary" data-dl href="https://github.com/lejuste/Levels/releases/latest">
+          <svg class="arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/></svg>
+          Download for Mac
+        </a>
+        <a class="btn btn-ghost" href="#how">See how it works</a>
+      </div>
+      <p class="hero-meta fade-up" style="--d:.85s"><span data-version>Version 0.1.0</span> · macOS 15 or later · Notarized by Apple</p>
+      <div class="trust fade-up" style="--d:.95s">
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>No audio driver to install</span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Audio never leaves your Mac</span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Uninstall by dragging to the Trash</span>
+      </div>
+    </div>
+
+    <div class="desk-col fade-up" style="--d:.4s">
+      <div class="desk-wrap">
+        <div class="desk" id="desk" aria-label="Interactive demo of the Levels menu">
+          <div class="desk-stage" id="deskStage">
+            <div class="menubar">
+              <span class="app-name">Finder</span>
+              <span class="mitem">File</span><span class="mitem">Edit</span><span class="mitem">View</span><span class="mitem">Window</span>
+              <div class="right">
+                <span class="mb-ico levels" id="mbIcon" role="button" tabindex="0" aria-label="Levels menu"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 2.5v11M8 2.5v11M13 2.5v11"/><path d="M1.2 10h3.6M6.2 5.5h3.6M11.2 8.5h3.6" stroke-width="1.7"/></svg></span>
+                <span class="mb-ico extra"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 12.6a1.2 1.2 0 1 1 0 2.4 1.2 1.2 0 0 1 0-2.4zM4.6 10.1a4.8 4.8 0 0 1 6.8 0l-1 1a3.4 3.4 0 0 0-4.8 0zM2.1 7.6a8.3 8.3 0 0 1 11.8 0l-1 1a6.9 6.9 0 0 0-9.8 0zM-.3 5.1a11.7 11.7 0 0 1 16.6 0l-1 1A10.3 10.3 0 0 0 .7 6.1z" transform="translate(0 -1)"/></svg></span>
+                <span class="mb-ico"><svg viewBox="0 0 24 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="3" width="18" height="10" rx="3"/><rect x="3.5" y="5" width="11" height="6" rx="1.5" fill="currentColor" stroke="none"/><path d="M21.5 6.5v3" stroke-linecap="round"/></svg></span>
+                <span class="mb-time">Sun 9:41 AM</span>
+              </div>
+            </div>
+
+            <span class="hear-label" id="hearLabel">What you hear</span>
+            <div class="win" id="win-music"><span class="appglyph lg" data-glyph="music"></span><div class="win-meta"><b>Music</b><span class="sub">Night Drive · Playing</span></div><div class="meter"></div></div>
+            <div class="win" id="win-call"><span class="appglyph lg" data-glyph="call"></span><div class="win-meta"><b>Video Call</b><span class="sub">Team standup</span></div><div class="meter"></div></div>
+            <div class="win" id="win-web"><span class="appglyph lg" data-glyph="web"></span><div class="win-meta"><b>Browser</b><span class="sub">A very quiet tutorial</span></div><div class="meter"></div></div>
+
+            <div class="pop" id="pop">
+              <div class="pop-title">Apps Playing Sound</div>
+              <div id="popRows"></div>
+              <div class="pop-div"></div>
+              <div class="mrow"><span>Open at Login</span><span class="switch"></span></div>
+              <div class="mrow"><span>Check for Updates…</span></div>
+              <div class="pop-div"></div>
+              <div class="mrow"><span>Quit Levels</span></div>
+            </div>
+
+            <div class="cursor hide" id="cursor"><svg viewBox="0 0 22 22"><path d="M3 2l14.5 10.2-6.3.9 3.7 6.9-2.6 1.3-3.6-7L4 18.4z" fill="#000" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/></svg></div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-caption" aria-live="polite"><span class="dot"></span><span class="txt" id="capText">Three apps playing at once.</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= PROBLEM ================= -->
+<section class="section" id="problem">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="kicker">The problem</span>
+      <h2>Your Mac has one volume.<br><span class="dim">You have a dozen apps.</span></h2>
+      <p class="lede">When a call is too loud, turning it down turns your music down too. Levels splits that one volume into a separate slider for each app.</p>
+    </div>
+    <div class="compare">
+      <div class="card cmp reveal">
+        <div><span class="tag">macOS on its own</span><h3>One slider moves everything</h3></div>
+        <div class="sys">
+          <span class="sys-label">Sound</span>
+          <div class="sysslider"><div class="sfill" id="sysFill"></div><svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 6h2.5L8 3v10L4.5 10H2z"/><path d="M10.5 5.5a3.5 3.5 0 0 1 0 5M12.3 3.7a6 6 0 0 1 0 8.6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></div>
+        </div>
+        <div class="lines" id="sysLines"></div>
+        <p class="cmp-foot">Turn the call down and your music drops with it.</p>
+      </div>
+      <div class="card cmp good reveal" style="--d:.1s">
+        <div><span class="tag">With Levels</span><h3>Every app gets its own slider</h3></div>
+        <div class="mini-pop"><div class="cmp-lines" id="cmpLines"></div></div>
+        <p class="cmp-foot">These sliders work. Drag one and only that app changes.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= HOW ================= -->
+<section class="section" id="how">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="kicker">How it works</span>
+      <h2>Three steps.<br><span class="dim">That's the whole manual.</span></h2>
+      <p class="lede">Nothing to set up. Apps show up in the menu on their own while they're playing sound.</p>
+    </div>
+    <div class="steps">
+      <div class="card step reveal">
+        <div class="stage" id="step1">
+          <div class="mb-demo"><span class="mb-ico levels" id="s1Icon"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 2.5v11M8 2.5v11M13 2.5v11"/><path d="M1.2 10h3.6M6.2 5.5h3.6M11.2 8.5h3.6" stroke-width="1.7"/></svg></span><span class="mb-ico plain"><svg viewBox="0 0 24 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="3" width="18" height="10" rx="3"/><rect x="3.5" y="5" width="11" height="6" rx="1.5" fill="currentColor" stroke="none"/></svg></span><span class="mb-time">9:41 AM</span></div>
+          <div class="mb-pop"><span style="--w:70%"></span><span style="--w:40%"></span><span style="--w:88%"></span></div>
+          <svg class="mb-cursor" viewBox="0 0 22 22"><path d="M3 2l14.5 10.2-6.3.9 3.7 6.9-2.6 1.3-3.6-7L4 18.4z" fill="#000" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/></svg>
+        </div>
+        <span class="step-n">1</span>
+        <h3>Click the sliders icon</h3>
+        <p>It's in your menu bar, next to Wi-Fi and the clock. Every app that's playing sound is listed.</p>
+      </div>
+      <div class="card step reveal" style="--d:.1s">
+        <div class="stage"><div class="mini-pop" id="step2"></div></div>
+        <span class="step-n">2</span>
+        <h3>Drag an app's slider</h3>
+        <p>Go down to quiet it, or past the notch to boost it up to 200%. Levels remembers it next time.</p>
+      </div>
+      <div class="card step reveal" style="--d:.2s">
+        <div class="stage"><div class="mini-pop" id="step3"></div></div>
+        <span class="step-n">3</span>
+        <h3>Click an icon to mute</h3>
+        <p>Click again to unmute at the same level. Right-click a row to reset it to 100%.</p>
+      </div>
+    </div>
+
+    <div class="card flow reveal">
+      <div>
+        <span class="kicker" style="margin-bottom:12px">Under the hood</span>
+        <h3>Built on Apple's own audio system.</h3>
+        <p>Since macOS 15, Apple lets an app pick up another app's sound. When you change an app's volume, Levels takes that app's sound, adjusts it, and plays it straight to your speakers or headphones.</p>
+        <p>There's no audio driver or system extension to install, and apps you never adjust aren't touched at all.</p>
+        <span class="fact"><b>~40 ms</b> added only to apps you adjust. You won't notice it for music, video, or calls.</span>
+      </div>
+      <div class="lanes">
+        <div>
+          <div class="lane-title">An app you've turned down</div>
+          <div class="lane">
+            <div class="node"><span class="appglyph lg" data-glyph="call"></span>Video Call</div>
+            <div class="wire"></div>
+            <div class="node levels"><img src="assets/icon.png" alt="">Levels · 35%</div>
+            <div class="wire after"></div>
+            <div class="node"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.3 5.8a9 9 0 0 1 0 12.4"/></svg></span>Speakers</div>
+          </div>
+        </div>
+        <div>
+          <div class="lane-title">An app you haven't touched</div>
+          <div class="lane">
+            <div class="node"><span class="appglyph lg" data-glyph="music"></span>Music</div>
+            <div class="wire bypass"></div>
+            <div class="node"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.3 5.8a9 9 0 0 1 0 12.4"/></svg></span>Speakers</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= LOOKS ================= -->
+<section class="section" id="looks">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="kicker">Designed for macOS</span>
+      <h2>Looks like it came<br><span class="dim">with your Mac.</span></h2>
+      <p class="lede">Levels uses the same style as the Wi-Fi and Control Center menus, in light and dark mode.</p>
+    </div>
+    <div class="shots reveal">
+      <div class="seg" role="tablist" aria-label="Appearance">
+        <span class="seg-thumb" id="segThumb"></span>
+        <button role="tab" aria-selected="true" data-mode="light">Light</button>
+        <button role="tab" aria-selected="false" data-mode="dark">Dark</button>
+      </div>
+      <div class="shot-stage" id="shotStage" data-mode="light">
+        <div class="shot-bg light"></div><div class="shot-bg dark"></div>
+        <img class="shot light" src="assets/screenshot-light.png" alt="The Levels menu in light mode: one app muted, Discord at 90%, and Chrome boosted to 200% with a play button">
+        <img class="shot dark" src="assets/screenshot-dark.png" alt="The Levels menu in dark mode: a muted app with a pause button, Spotify at 61%, and Discord at 66%">
+      </div>
+      <p class="shot-note">Real screenshots of Levels</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= FEATURES ================= -->
+<section class="section" id="features">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="kicker">Features</span>
+      <h2>Small app.<br><span class="dim">Thought through.</span></h2>
+    </div>
+    <div class="bento">
+      <div class="card feat wide reveal">
+        <h3>Boost up to 200%</h3>
+        <p>Past 100%, the slider turns grey so you know you're boosting. A small notch marks 100%, and boosted audio is limited so it doesn't crackle.</p>
+        <div class="viz"><div class="mini-pop" id="fBoost"></div></div>
+      </div>
+      <div class="card feat wide reveal" style="--d:.08s">
+        <h3>One-click mute</h3>
+        <p>Click an app's icon to mute it. Click again and it comes back at the volume it had. Dragging the slider unmutes too.</p>
+        <div class="viz"><div class="mini-pop" id="fMute"></div></div>
+      </div>
+      <div class="card feat reveal">
+        <h3>Remembers every app</h3>
+        <p>Set your calls to 60% once and they stay there, even after you restart your Mac.</p>
+        <div class="viz"><div class="memory">
+          <span class="restart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v4.5h-4.5"/></svg>After a restart</span>
+          <div class="mline" style="--d:0s"><span class="appglyph" data-glyph="call"></span>Video Call<b>60%</b><svg class="ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+          <div class="mline" style="--d:.12s"><span class="appglyph" data-glyph="music"></span>Music<b>80%</b><svg class="ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+          <div class="mline" style="--d:.24s"><span class="appglyph" data-glyph="web"></span>Browser<b>150%</b><svg class="ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+        </div></div>
+      </div>
+      <div class="card feat reveal" style="--d:.08s">
+        <h3>Play and pause from the menu</h3>
+        <p>The app your keyboard's play/pause key controls gets a button. Hover to see what's playing. Right-click for next and previous.</p>
+        <div class="viz"><div class="np"><div class="np-tip" id="npTip">Night Drive <small>— Lo-Fi Radio</small></div><div class="mini-pop" id="fPlay"></div></div></div>
+      </div>
+      <div class="card feat reveal" style="--d:.16s">
+        <h3>Smooth, not jumpy</h3>
+        <p>Volume changes and mutes fade in a fraction of a second instead of cutting off abruptly.</p>
+        <div class="viz"><div class="meter" id="fSmooth" style="height:70px;gap:4px"></div></div>
+      </div>
+      <div class="card feat reveal">
+        <h3>Follows your speakers and headphones</h3>
+        <p>Switch from speakers to AirPods and every app's level comes along.</p>
+        <div class="viz"><div class="devices">
+          <div class="dev"><span id="devIco"></span><span class="dn" id="devName">MacBook Speakers</span></div>
+          <span class="dev-arrow">Video Call stays at <b style="color:var(--text)">60%</b></span>
+        </div></div>
+      </div>
+      <div class="card feat reveal" style="--d:.08s">
+        <h3>Stays out of the way</h3>
+        <p>Lives in the menu bar with no Dock icon, and can open when you log in.</p>
+        <div class="viz"><div class="away">
+          <div class="mb-strip"><span class="mb-ico levels"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 2.5v11M8 2.5v11M13 2.5v11"/><path d="M1.2 10h3.6M6.2 5.5h3.6M11.2 8.5h3.6" stroke-width="1.7"/></svg></span><span class="mb-time">9:41 AM</span></div>
+          <div class="mrow"><span>Open at Login</span><span class="switch"></span></div>
+        </div></div>
+      </div>
+      <div class="card feat reveal" style="--d:.16s">
+        <h3>Updates itself</h3>
+        <p>New versions arrive on their own. Every update is signed, so only real ones install.</p>
+        <div class="viz"><div class="upd">
+          <div class="a"><img src="assets/icon.png" alt="">Checking for updates…<span class="spin"></span></div>
+          <div class="b"><img src="assets/icon.png" alt="">Levels is up to date<svg class="ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+        </div></div>
+      </div>
+      <div class="card feat full reveal">
+        <div><h3>Accessible</h3><p>Works with the accessibility settings you already use.</p></div>
+        <div class="chips">
+          <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4.5" r="1.8"/><path d="M4.5 8.5l7.5 1.5 7.5-1.5M12 10v4.5M8.5 20.5l3.5-6 3.5 6"/></svg>VoiceOver</span>
+          <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17z" fill="currentColor"/></svg>Increase Contrast</span>
+          <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 12h4M10 12h4M16 12h4"/></svg>Reduce Motion</span>
+          <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></svg>Light and Dark</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= PRIVACY ================= -->
+<section class="section" id="privacy">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="kicker">Safe to install</span>
+      <h2>Your audio stays yours.<br><span class="dim">Here's exactly what Levels does.</span></h2>
+    </div>
+    <div class="safe-grid">
+      <div class="safe-list">
+        <div class="card safe reveal">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5.5c0 4.3-3 7.9-7 9.5-4-1.6-7-5.2-7-9.5V6z"/><path d="M8.8 12.2l2.2 2.2 4.4-4.6"/></svg></span>
+          <h3>Notarized by Apple</h3>
+          <p>Every release is signed with an Apple Developer ID and checked by Apple for malware before it's published.</p>
+        </div>
+        <div class="card safe reveal" style="--d:.06s">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></svg></span>
+          <h3>Nothing is recorded</h3>
+          <p>Sound is adjusted as it plays. It's never saved to disk and never sent anywhere.</p>
+        </div>
+        <div class="card safe reveal" style="--d:.12s">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"/><path d="M4 4l16 16"/></svg></span>
+          <h3>No driver or extension</h3>
+          <p>Levels uses a feature built into macOS 15. Nothing gets installed deep in your system.</p>
+        </div>
+        <div class="card safe reveal" style="--d:.18s">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 3.7 5.4 3.7 8.5s-1.2 5.9-3.7 8.5c-2.5-2.6-3.7-5.4-3.7-8.5S9.5 6.1 12 3.5z"/></svg></span>
+          <h3>Only goes online for updates</h3>
+          <p>No account, no sign-in. The only thing Levels connects to the internet for is checking for a new version.</p>
+        </div>
+        <div class="card safe reveal" style="--d:.24s">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="5"/><path d="M9.5 13.5L8 21l4-2 4 2-1.5-7.5"/></svg></span>
+          <h3>Signed updates</h3>
+          <p>Updates are cryptographically signed, and Levels refuses any update that isn't.</p>
+        </div>
+        <div class="card safe reveal" style="--d:.3s">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13"/></svg></span>
+          <h3>Easy to remove</h3>
+          <p>Choose Quit Levels from its menu, then drag it from Applications to the Trash. That's it.</p>
+        </div>
+      </div>
+      <div class="card perm reveal" style="--d:.1s">
+        <h3>Why macOS asks about "System Audio Recording"</h3>
+        <p>The first time you open Levels, macOS asks for permission. The name sounds scarier than it is: to change an app's volume, Levels has to pass that app's sound through itself.</p>
+        <div class="alert" aria-hidden="true">
+          <img src="assets/icon.png" alt="">
+          <b>"Levels" would like to access system audio.</b>
+          <p>Levels needs to capture app audio so it can change each app's volume. Audio never leaves your Mac.</p>
+          <div class="btns"><span>Don't Allow</span><span class="allow">Allow</span></div>
+        </div>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Only apps whose volume you've changed go through Levels.</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>You can turn it off anytime in System Settings › Privacy &amp; Security.</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Clicked "Don't Allow" by mistake? Levels has a button that takes you to the right setting.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= INSTALL ================= -->
+<section class="section" id="install">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="kicker">Install</span>
+      <h2>Running in under a minute.</h2>
+    </div>
+    <div class="install">
+      <div class="card inst reveal">
+        <div class="stage"><div class="dmg"><div class="dmg-file"><svg class="dmg-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v14M6 12l6 6 6-6"/></svg><img src="assets/icon.png" alt=""></div><span data-dmgname>Levels.dmg</span></div></div>
+        <span class="step-n">1</span>
+        <h3>Download</h3>
+        <p>Get the latest <b style="color:var(--text)">.dmg</b> file. It's small and downloads in seconds.</p>
+      </div>
+      <div class="card inst reveal" style="--d:.1s">
+        <div class="stage"><div class="finder" id="finder"><div class="tb"><i></i><i></i><i></i></div><div class="items">
+          <div class="f-app" id="fApp"><img src="assets/icon.png" alt="">Levels</div>
+          <div class="f-apps" id="fApps"><div class="folder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5l-6 14M12 5l6 14M8.5 13.5h7"/></svg></div>Applications</div>
+        </div></div></div>
+        <span class="step-n">2</span>
+        <h3>Drag to Applications</h3>
+        <p>Open the file and drag Levels onto the Applications folder.</p>
+      </div>
+      <div class="card inst reveal" style="--d:.2s">
+        <div class="stage"><div class="alert" style="transform:scale(.8);margin:0"><b>"Levels" would like to access system audio.</b><div class="btns"><span>Don't Allow</span><span class="allow">Allow</span></div></div></div>
+        <span class="step-n">3</span>
+        <h3>Open and allow</h3>
+        <p>Open Levels, click <b style="color:var(--text)">Allow</b>, and look for the sliders icon in your menu bar.</p>
+      </div>
+    </div>
+    <p class="req reveal">Requires <b>macOS 15 Sequoia</b> or later.</p>
+  </div>
+</section>
+
+<!-- ================= FAQ ================= -->
+<section class="section" id="faq">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="kicker">Questions</span>
+      <h2>Good questions.</h2>
+    </div>
+    <div class="faq">
+      <details class="reveal"><summary>Does Levels record my audio?<span class="pm"></span></summary><div class="ans"><p>No. macOS calls the permission "System Audio Recording" because Levels has to pass audio through itself to change its volume. The audio is adjusted as it plays and is never saved or sent anywhere. The only thing Levels connects to the internet for is checking for updates.</p></div></details>
+      <details class="reveal"><summary>Does it add delay?<span class="pm"></span></summary><div class="ans"><p>Only to apps whose volume you've changed. Apps you never adjust aren't touched at all. Adjusted apps get a small delay of about 40 ms, which you won't notice for music, video, or calls. It could matter for rhythm games or recording music.</p></div></details>
+      <details class="reveal"><summary>Why doesn't an app show up?<span class="pm"></span></summary><div class="ans"><p>Apps appear only while they're playing sound, and stay listed for a few seconds after they stop. Quick notification sounds are ignored. Start playing something and it will appear.</p></div></details>
+      <details class="reveal"><summary>Does my Mac's main volume still work?<span class="pm"></span></summary><div class="ans"><p>Yes, exactly as before. Levels sets each app's volume relative to it, so your volume keys still turn everything up and down together.</p></div></details>
+      <details class="reveal"><summary>I clicked "Don't Allow" by mistake.<span class="pm"></span></summary><div class="ans"><p>Open the Levels menu and click <b>Open Privacy Settings…</b>, then turn on Levels under <b>System Audio Recording Only</b>.</p></div></details>
+      <details class="reveal"><summary>Can I pause a specific app?<span class="pm"></span></summary><div class="ans"><p>Only the one your play/pause key controls. macOS only lets its own apps, like Control Center, pause a particular app, so Levels shows the play/pause button on that app's row.</p></div></details>
+      <details class="reveal"><summary>How do I uninstall it?<span class="pm"></span></summary><div class="ans"><p>Choose <b>Quit Levels</b> from its menu, then drag Levels from Applications to the Trash. There's no driver or helper left behind.</p></div></details>
+    </div>
+  </div>
+</section>
+
+<!-- ================= FINAL ================= -->
+<section class="final">
+  <div class="wrap reveal">
+    <img class="final-icon" src="assets/icon.png" alt="Levels app icon">
+    <h2>Give every app<br><span class="grad">its own volume.</span></h2>
+    <p>Download Levels, drag it to Applications, and your menu bar gets a mixer.</p>
+    <a class="btn btn-primary" data-dl href="https://github.com/lejuste/Levels/releases/latest">
+      <svg class="arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/></svg>
+      Download for Mac
+    </a>
+    <p class="hero-meta"><span data-version>Version 0.1.0</span> · macOS 15 or later · Notarized by Apple</p>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="assets/icon.png" alt="">Levels</a>
+    <nav aria-label="Footer">
+      <a href="https://github.com/lejuste/Levels/releases">All releases</a>
+      <a href="#privacy">Privacy</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <span>Not affiliated with Apple. macOS is a trademark of Apple Inc.</span>
+  </div>
+</footer>
+
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- App look-alikes (generic, not real brands) ---------- */
+const GLYPH = {
+  music: '<svg viewBox="0 0 24 24"><path fill="#fff" d="M9.5 17.5a3 3 0 1 1-2-2.83V6.2L19 3.6v11.4a3 3 0 1 1-2-2.83V7.4l-7.5 1.7z"/></svg>',
+  call: '<svg viewBox="0 0 24 24"><path fill="#fff" d="M2.5 7.8A2.8 2.8 0 0 1 5.3 5h8.4a2.8 2.8 0 0 1 2.8 2.8v8.4a2.8 2.8 0 0 1-2.8 2.8H5.3a2.8 2.8 0 0 1-2.8-2.8zM17.5 10l4-2.6v9.2l-4-2.6z"/></svg>',
+  web: '<svg viewBox="0 0 24 24"><g fill="none" stroke="#fff" stroke-width="1.9"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 3.7 5.4 3.7 8.5s-1.2 5.9-3.7 8.5c-2.5-2.6-3.7-5.4-3.7-8.5S9.5 6.1 12 3.5z"/></g></svg>',
+};
+const GRAD = { music: ['#ff7a95', '#e8264f'], call: ['#56e585', '#18a346'], web: ['#63b8ff', '#1e6bff'] };
+const NAME = { music: 'Music', call: 'Video Call', web: 'Browser' };
+const glyphStyle = k => `background:linear-gradient(160deg,${GRAD[k][0]},${GRAD[k][1]})`;
+$$('[data-glyph]').forEach(el => { const k = el.dataset.glyph; el.innerHTML = GLYPH[k]; el.style.cssText += glyphStyle(k); });
+
+const MUTE = '<svg viewBox="0 0 16 16"><path fill="#fff" d="M2 6h2.4L8 3v10L4.4 10H2z"/><path d="M10 6l4 4M14 6l-4 4" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></svg>';
+const PLAY = '<svg viewBox="0 0 12 12"><path fill="#fff" d="M3 1.5v9l7.5-4.5z"/></svg>';
+const PAUSE = '<svg viewBox="0 0 12 12"><path fill="#fff" d="M2.5 1.5h2.5v9H2.5zM7 1.5h2.5v9H7z"/></svg>';
+
+/* ---------- Volume math, same as the app ---------- */
+const posOf = v => v <= 1 ? v * 0.8 : 0.8 + (v - 1) * 0.2;
+const volOf = p => { p = clamp(p, 0, 1); return p <= 0.8 ? p / 0.8 : 1 + (p - 0.8) / 0.2; };
+
+/* ---------- Animation loop ---------- */
+const tickers = new Set();
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const t = now / 1000;
+  tickers.forEach(f => f(t, dt));
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// Only animate things that are on screen.
+const onScreen = new WeakMap();
+const visIO = new IntersectionObserver(es => es.forEach(e => onScreen.set(e.target, e.isIntersecting)), { rootMargin: '100px' });
+const watch = el => { onScreen.set(el, false); visIO.observe(el); };
+const visible = el => onScreen.get(el) !== false;
+
+/* ---------- Row: a working copy of Levels' app row ---------- */
+class Row {
+  constructor(key, o = {}) {
+    this.key = key;
+    this.target = this.shown = o.vol ?? 1;
+    this.muted = !!o.muted;
+    this.playing = o.playing ?? true;
+    this.onUser = o.onUser || (() => {});
+    const el = this.el = document.createElement('div');
+    el.className = 'row';
+    el.innerHTML = `
+      <button class="appicon" type="button" aria-label="Mute ${NAME[key]}"><span class="appglyph" style="${glyphStyle(key)}">${GLYPH[key]}</span><span class="mute-badge">${MUTE}</span></button>
+      <div class="slider" role="slider" tabindex="0" aria-label="${NAME[key]} volume" aria-valuemin="0" aria-valuemax="200"><div class="fill"><div class="boost"></div></div><div class="notch"></div><div class="knob"></div></div>
+      <span class="pct"></span>
+      ${o.transport ? `<button class="transport" type="button"></button>` : (o.spacer === false ? '' : '<span class="transport-spacer"></span>')}`;
+    this.slider = $('.slider', el); this.fillEl = $('.fill', el); this.boostEl = $('.boost', el);
+    this.notch = $('.notch', el); this.knob = $('.knob', el); this.pct = $('.pct', el);
+    this.icon = $('.appicon', el); this.tp = $('.transport', el);
+
+    this.icon.addEventListener('click', e => { if (e.isTrusted) this.onUser(); this.toggleMute(); });
+    if (this.tp) this.tp.addEventListener('click', e => { if (e.isTrusted) this.onUser(); this.setPlaying(!this.playing); });
+
+    const s = this.slider;
+    s.addEventListener('pointerdown', e => {
+      if (e.button !== 0) return;
+      this.onUser();
+      s.setPointerCapture(e.pointerId);
+      this.pressed = true; this.dragging = false;
+      this.setFromClient(e.clientX, true);
+    });
+    s.addEventListener('pointermove', e => { if (this.pressed) { this.dragging = true; this.setFromClient(e.clientX, false); } });
+    const up = () => { this.pressed = this.dragging = false; };
+    s.addEventListener('pointerup', up); s.addEventListener('pointercancel', up);
+    s.addEventListener('keydown', e => {
+      const d = { ArrowRight: .05, ArrowUp: .05, ArrowLeft: -.05, ArrowDown: -.05 }[e.key];
+      if (!d) return;
+      e.preventDefault(); this.onUser();
+      this.setVolume(clamp(Math.round((this.target + d) * 100) / 100, 0, 2), true);
+    });
+
+    this.setPlaying(this.playing);
+    this.lastKey = '';
+    tickers.add((t, dt) => this.tick(dt));
+  }
+  setFromClient(clientX, glide) {
+    const r = this.slider.getBoundingClientRect();
+    const w = this.slider.clientWidth;
+    const local = (clientX - r.left) * (w / r.width);
+    this.setPosition((local - 11) / (w - 22), glide);
+  }
+  setPosition(p, glide) {
+    let v = volOf(p);
+    if (Math.abs(v - 1) < 0.04) v = 1; // detent at 100%
+    this.setVolume(Math.round(v * 100) / 100, glide);
+  }
+  setVolume(v, glide) {
+    this.target = v;
+    if (!glide || reduceMotion) this.shown = v;
+    if (this.muted) this.setMuted(false);
+  }
+  setMuted(m) {
+    this.muted = m;
+    this.el.classList.toggle('muted', m);
+    this.icon.setAttribute('aria-label', `${m ? 'Unmute' : 'Mute'} ${NAME[this.key]}`);
+  }
+  toggleMute() { this.setMuted(!this.muted); }
+  setPlaying(p) {
+    this.playing = p;
+    if (this.tp) { this.tp.innerHTML = p ? PAUSE : PLAY; this.tp.setAttribute('aria-label', `${p ? 'Pause' : 'Play'} ${NAME[this.key]}`); }
+    this.el.dispatchEvent(new CustomEvent('playing'));
+  }
+  get gain() { return this.playing && !this.muted ? this.shown : 0; }
+  tick(dt) {
+    if (!this.dragging) this.shown += (this.target - this.shown) * (1 - Math.exp(-dt / 0.07));
+    if (Math.abs(this.target - this.shown) < 0.001) this.shown = this.target;
+    const w = this.slider.clientWidth;
+    const key = `${this.shown.toFixed(4)}|${this.muted}|${w}`;
+    if (key === this.lastKey || !w) return;
+    this.lastKey = key;
+    const travel = w - 22, p = posOf(this.shown);
+    const notchX = 11 + travel * 0.8;
+    this.fillEl.style.width = `${22 + travel * p}px`;
+    this.knob.style.transform = `translateX(${travel * p}px)`;
+    this.notch.style.left = `${notchX - 0.75}px`;
+    this.notch.style.opacity = p < 0.78 ? 1 : 0;
+    this.boostEl.style.left = `${notchX - 11}px`;
+    this.boostEl.style.opacity = p > 0.8 && !this.muted ? 1 : 0;
+    const pc = Math.round(this.shown * 100);
+    this.pct.textContent = this.muted ? 'Muted' : `${pc}%`;
+    this.slider.setAttribute('aria-valuenow', pc);
+    this.slider.setAttribute('aria-valuetext', this.muted ? `Muted, ${pc} percent when unmuted` : `${pc} percent`);
+  }
+}
+
+/* ---------- Meter: bouncing bars that show what you'd hear ---------- */
+class Meter {
+  constructor(el, source, n = 14, seed = Math.random() * 10) {
+    this.el = el; this.source = source; this.seed = seed; this.amp = 0;
+    el.innerHTML = '<i></i>'.repeat(n);
+    this.bars = [...el.children];
+    watch(el);
+    tickers.add((t, dt) => this.tick(t, dt));
+  }
+  tick(t, dt) {
+    if (!visible(this.el)) return;
+    // Sources report a level on the slider's scale (0–2), which is closer to how loud it sounds than raw gain.
+    const g = this.source();
+    const target = g <= 1 ? g * 0.62 : 0.62 + (g - 1) * 0.38;
+    this.amp += (target - this.amp) * (1 - Math.exp(-dt / 0.09));
+    this.el.classList.toggle('boosted', g > 1.02);
+    this.el.classList.toggle('silent', this.amp < 0.02);
+    const s = this.seed;
+    this.bars.forEach((b, i) => {
+      const n = 0.5 + 0.28 * Math.sin(t * 7.1 + i * 0.9 + s) + 0.22 * Math.sin(t * 3.3 + i * 1.7 + s * 2);
+      const h = reduceMotion ? 0.75 : 0.25 + 0.75 * n;
+      b.style.transform = `scaleY(${Math.max(0.06, h * this.amp)})`;
+    });
+  }
+}
+
+/* ---------- Scroll: nav, progress, reveals ---------- */
+const nav = $('#nav'), progress = $('#progress');
+function onScroll() {
+  const y = scrollY, h = document.documentElement.scrollHeight - innerHeight;
+  nav.classList.toggle('scrolled', y > 10);
+  progress.style.transform = `scaleX(${h > 0 ? y / h : 0})`;
+}
+addEventListener('scroll', onScroll, { passive: true }); onScroll();
+
+const revealIO = new IntersectionObserver(es => es.forEach(e => {
+  if (e.isIntersecting) { e.target.classList.add('in'); revealIO.unobserve(e.target); }
+}), { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+$$('.reveal').forEach(el => revealIO.observe(el));
+
+// Cursor spotlight on cards
+document.addEventListener('pointermove', e => {
+  const c = e.target.closest && e.target.closest('.card');
+  if (!c) return;
+  const r = c.getBoundingClientRect();
+  c.style.setProperty('--mx', `${e.clientX - r.left}px`);
+  c.style.setProperty('--my', `${e.clientY - r.top}px`);
+});
+
+// Headline: split into words for the staggered entrance
+(() => {
+  const h1 = $('#h1');
+  const words = h1.textContent.trim().split(/\s+/);
+  h1.innerHTML = words.map((w, i) => {
+    const grad = w === 'every' || w === 'app' ? ' grad' : '';
+    return `<span class="w${grad}" style="--i:${i}">${w}</span>`;
+  }).join(' ');
+})();
+
+/* ---------- Hero background equalizer ---------- */
+(() => {
+  const c = $('#eq'), ctx = c.getContext('2d');
+  let w = 0, h = 0, dpr = 1;
+  const size = () => { dpr = Math.min(2, devicePixelRatio || 1); w = c.clientWidth; h = c.clientHeight; c.width = w * dpr; c.height = h * dpr; };
+  size(); addEventListener('resize', size);
+  watch(c);
+  const draw = t => {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    const bw = 6, gap = 8, n = Math.ceil(w / (bw + gap));
+    for (let i = 0; i < n; i++) {
+      const x = i * (bw + gap);
+      const k = i / n;
+      const v = 0.18 + 0.5 * (0.5 + 0.5 * Math.sin(t * 0.9 + i * 0.21)) * (0.5 + 0.5 * Math.sin(t * 1.7 + i * 0.07 + 2)) + 0.15 * Math.sin(t * 3 + i * 1.3);
+      const bh = Math.max(4, v * h * (0.55 + 0.45 * Math.sin(Math.PI * k)));
+      const accent = i % 11 === 7;
+      const g = ctx.createLinearGradient(0, h - bh, 0, h);
+      g.addColorStop(0, accent ? 'rgba(255,159,46,.9)' : 'rgba(255,255,255,.22)');
+      g.addColorStop(1, accent ? 'rgba(255,159,46,0)' : 'rgba(255,255,255,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.roundRect(x, h - bh, bw, bh, 3); ctx.fill();
+    }
+  };
+  if (reduceMotion) { draw(1); return; }
+  tickers.add(t => { if (visible(c)) draw(t); });
+})();
+
+/* ---------- Hero: the interactive desktop ---------- */
+const hero = (() => {
+  const desk = $('#desk'), stage = $('#deskStage'), pop = $('#pop'), icon = $('#mbIcon');
+  const cursor = $('#cursor'), capText = $('#capText'), hear = $('#hearLabel');
+  let scale = 1, userTookOver = false, idleTimer = 0, demoToken = 0;
+  const rows = {
+    music: new Row('music', { vol: 0.7, transport: true, onUser: () => takeOver() }),
+    call: new Row('call', { vol: 1, onUser: () => takeOver() }),
+    web: new Row('web', { vol: 0.45, onUser: () => takeOver() }),
+  };
+  const popRows = $('#popRows');
+  popRows.append(rows.music.el, rows.call.el, rows.web.el);
+  const wins = { music: $('#win-music'), call: $('#win-call'), web: $('#win-web') };
+  Object.entries(wins).forEach(([k, el], i) => new Meter($('.meter', el), () => rows[k].gain, 14, i * 2.3));
+  const musicSub = $('.sub', wins.music);
+  rows.music.el.addEventListener('playing', () => { musicSub.textContent = `Night Drive · ${rows.music.playing ? 'Playing' : 'Paused'}`; });
+
+  function layout() {
+    const W0 = desk.clientWidth;
+    const compact = W0 < 560;
+    const W = compact ? 380 : 720, H = compact ? 590 : 470;
+    scale = W0 / W;
+    stage.classList.toggle('compact', compact);
+    stage.style.width = `${W}px`; stage.style.height = `${H}px`;
+    stage.style.transform = `scale(${scale})`;
+    desk.style.height = `${H * scale}px`;
+    if (compact) {
+      pop.style.left = '40px';
+      hear.style.cssText = 'left:22px;top:316px';
+      ['music', 'call', 'web'].forEach((k, i) => { wins[k].style.cssText = `left:20px;right:20px;top:${340 + i * 80}px`; });
+    } else {
+      const ir = icon.getBoundingClientRect(), sr = stage.getBoundingClientRect();
+      const iconLeft = (ir.left - sr.left) / scale;
+      pop.style.left = `${clamp(iconLeft - 8, 12, W - 312)}px`;
+      hear.style.cssText = 'left:30px;top:74px';
+      ['music', 'call', 'web'].forEach((k, i) => { wins[k].style.cssText = `left:28px;width:300px;top:${100 + i * 92}px`; });
+    }
+  }
+  new ResizeObserver(layout).observe(desk);
+  layout();
+
+  const setOpen = o => { pop.classList.toggle('open', o); icon.classList.toggle('active', o); };
+  icon.addEventListener('click', e => { if (e.isTrusted) takeOver(); setOpen(!pop.classList.contains('open')); });
+  icon.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); takeOver(); setOpen(!pop.classList.contains('open')); } });
+
+  // Subtle 3D tilt that follows the pointer
+  const wrap = $('.desk-wrap');
+  if (!reduceMotion) {
+    wrap.addEventListener('pointermove', e => {
+      const r = wrap.getBoundingClientRect();
+      const x = (e.clientX - r.left) / r.width - 0.5, y = (e.clientY - r.top) / r.height - 0.5;
+      desk.style.transform = `rotateY(${x * 5}deg) rotateX(${-y * 5}deg)`;
+    });
+    wrap.addEventListener('pointerleave', () => { desk.style.transform = ''; });
+  }
+
+  let capTimer = 0;
+  function caption(s) {
+    if (capText.textContent === s) return;
+    capText.classList.add('swap');
+    clearTimeout(capTimer);
+    capTimer = setTimeout(() => { capText.textContent = s; capText.classList.remove('swap'); }, 200);
+  }
+
+  // ----- Scripted demo -----
+  let cx = 0, cy = 0;
+  const placeCursor = () => { cursor.style.transform = `translate(${cx - 3}px, ${cy - 2}px)`; };
+  const alive = tok => { if (tok !== demoToken) throw 'cancel'; };
+  const sleep = (ms, tok) => new Promise(res => setTimeout(res, ms)).then(() => alive(tok));
+  const easeIO = k => k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+  const tween = (ms, tok, fn) => new Promise((res, rej) => {
+    const t0 = performance.now();
+    const step = now => {
+      if (tok !== demoToken) return rej('cancel');
+      const k = Math.min(1, (now - t0) / ms);
+      fn(easeIO(k));
+      k < 1 ? requestAnimationFrame(step) : res();
+    };
+    requestAnimationFrame(step);
+  });
+  const pt = (el, fx = .5, fy = .5) => {
+    const r = el.getBoundingClientRect(), sr = stage.getBoundingClientRect();
+    return { x: (r.left - sr.left + r.width * fx) / scale, y: (r.top - sr.top + r.height * fy) / scale };
+  };
+  const move = (p, ms, tok) => { const x0 = cx, y0 = cy; return tween(ms, tok, k => { cx = x0 + (p.x - x0) * k; cy = y0 + (p.y - y0) * k; placeCursor(); }); };
+  async function click(tok) {
+    cursor.classList.add('down');
+    const r = document.createElement('span'); r.className = 'ripple'; r.style.left = `${cx}px`; r.style.top = `${cy}px`;
+    stage.append(r); setTimeout(() => r.remove(), 700);
+    await sleep(130, tok);
+    cursor.classList.remove('down');
+  }
+  const knobPt = row => pt(row.knob);
+  async function drag(row, v, ms, tok) {
+    const sp = pt(row.slider, 0, .5), w = row.slider.clientWidth, travel = w - 22;
+    const x1 = sp.x + 11 + travel * posOf(v);
+    const x0 = cx;
+    cursor.classList.add('down');
+    row.dragging = true;
+    try {
+      await tween(ms, tok, k => { cx = x0 + (x1 - x0) * k; placeCursor(); row.setPosition((cx - sp.x - 11) / travel, false); });
+    } finally { row.dragging = false; cursor.classList.remove('down'); }
+    row.setVolume(v, false);
+  }
+
+  async function once(tok) {
+    setOpen(false);
+    rows.music.setMuted(false); rows.music.setPlaying(true); rows.music.setVolume(0.7, true);
+    rows.call.setVolume(1, true); rows.web.setVolume(0.45, true);
+    cursor.classList.remove('hide');
+    caption('Three apps playing at once. The call is loud and the video is too quiet.');
+    await sleep(2200, tok);
+    await move(pt(icon), 900, tok); await click(tok); setOpen(true);
+    caption('Click the sliders icon in your menu bar.');
+    await sleep(1100, tok);
+    await move(knobPt(rows.call), 800, tok);
+    caption('Turn the call down…');
+    await drag(rows.call, 0.35, 1100, tok);
+    await sleep(500, tok);
+    await move(knobPt(rows.web), 700, tok);
+    caption('…boost the quiet video past 100%…');
+    await drag(rows.web, 1.85, 1300, tok);
+    await sleep(600, tok);
+    await move(pt(rows.music.icon), 800, tok);
+    caption('…and click an icon to mute the music.');
+    await click(tok); rows.music.setMuted(true);
+    await sleep(1900, tok);
+    caption('Click it again and the music comes back at the same level.');
+    await click(tok); rows.music.setMuted(false);
+    await sleep(2200, tok);
+    caption('Levels remembers each app\'s volume. Now you try.');
+    await move({ x: cx - 60, y: cy + 150 }, 900, tok);
+    cursor.classList.add('hide');
+    await sleep(4200, tok);
+  }
+  async function run() {
+    const tok = ++demoToken;
+    cx = stage.clientWidth * .45; cy = stage.clientHeight * .8; placeCursor();
+    try { for (;;) await once(tok); } catch (e) { if (e !== 'cancel') console.error(e); }
+  }
+  function stop() { demoToken++; cursor.classList.add('hide'); $$('.ripple', stage).forEach(r => r.remove()); }
+
+  function takeOver() {
+    if (!userTookOver) {
+      userTookOver = true; stop(); setOpen(true);
+      caption('Your turn. Drag a slider, click an icon to mute, or press pause.');
+    }
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => { userTookOver = false; if (heroVisible) run(); }, 14000);
+  }
+
+  let heroVisible = false;
+  if (reduceMotion) {
+    setOpen(true);
+    caption('Try it: drag a slider, click an icon to mute, or press pause.');
+  } else {
+    new IntersectionObserver(([e]) => {
+      heroVisible = e.isIntersecting;
+      if (heroVisible && !userTookOver) run(); else if (!heroVisible) stop();
+    }, { threshold: 0.35 }).observe(desk);
+  }
+  return { rows };
+})();
+
+/* ---------- Helper: loop a set of presets while on screen, until the visitor touches it ---------- */
+function autoplay(el, steps, every) {
+  let i = 0, touched = false, timer = 0;
+  watch(el);
+  el.addEventListener('pointerdown', () => { touched = true; });
+  el.addEventListener('keydown', () => { touched = true; });
+  const tick = () => { if (!touched && visible(el) && !reduceMotion) { steps[i % steps.length](); i++; } };
+  timer = setInterval(tick, every);
+  return () => clearInterval(timer);
+}
+
+/* ---------- Problem: one master slider vs. per-app sliders ---------- */
+(() => {
+  const lines = $('#sysLines'), fill = $('#sysFill');
+  const base = { music: 0.55, call: 1.0, web: 0.3 };
+  const sub = { music: 'Your playlist', call: 'Way too loud', web: 'Too quiet to hear' };
+  let master = 0.85, masterT = 0.85;
+  ['music', 'call', 'web'].forEach((k, i) => {
+    const d = document.createElement('div'); d.className = 'line';
+    d.innerHTML = `<span class="appglyph lg" style="${glyphStyle(k)}">${GLYPH[k]}</span><span class="nm">${NAME[k]}<small>${sub[k]}</small></span><div class="meter"></div>`;
+    lines.append(d);
+    new Meter($('.meter', d), () => master * base[k] * 1.3, 16, i * 1.7);
+  });
+  const presets = [0.85, 0.3, 0.6, 0.2];
+  let pi = 0;
+  watch(lines);
+  setInterval(() => { if (visible(lines) && !reduceMotion) { masterT = presets[pi++ % presets.length]; } }, 2400);
+  tickers.add((t, dt) => {
+    master += (masterT - master) * (1 - Math.exp(-dt / 0.18));
+    fill.style.width = `calc(22px + (100% - 22px) * ${master})`;
+  });
+
+  const box = $('#cmpLines');
+  const rows = {};
+  ['music', 'call', 'web'].forEach((k, i) => {
+    const r = rows[k] = new Row(k, { vol: [0.8, 0.35, 1.6][i], spacer: false });
+    const line = document.createElement('div'); line.className = 'cmp-line';
+    const m = document.createElement('div'); m.className = 'meter';
+    line.append(r.el, m); box.append(line);
+    new Meter(m, () => r.gain, 10, i * 2.1);
+  });
+  autoplay(box, [
+    () => { rows.call.setVolume(0.9, true); },
+    () => { rows.web.setVolume(1.8, true); },
+    () => { rows.music.setMuted(true); },
+    () => { rows.call.setVolume(0.35, true); rows.music.setMuted(false); },
+    () => { rows.web.setVolume(1.2, true); rows.music.setVolume(0.55, true); },
+    () => { rows.music.setVolume(0.8, true); rows.web.setVolume(1.6, true); },
+  ], 1600);
+})();
+
+/* ---------- How it works ---------- */
+(() => {
+  const s1 = $('#step1'), ic = $('#s1Icon');
+  const setX = () => {
+    const r = ic.getBoundingClientRect(), sr = s1.getBoundingClientRect();
+    s1.style.setProperty('--iconx', `${r.left - sr.left + r.width / 2}px`);
+    const pop = $('.mb-pop', s1);
+    pop.style.right = 'auto';
+    pop.style.left = `${clamp(r.left - sr.left - 10, 8, sr.width - 178)}px`;
+  };
+  new ResizeObserver(setX).observe(s1); setX();
+
+  const r2 = new Row('web', { vol: 0.5, spacer: false });
+  $('#step2').append(r2.el);
+  autoplay($('#step2'), [() => r2.setVolume(1, true), () => r2.setVolume(1.7, true), () => r2.setVolume(0.3, true), () => r2.setVolume(0.5, true)], 1500);
+
+  const r3 = new Row('music', { vol: 0.75, spacer: false });
+  $('#step3').append(r3.el);
+  autoplay($('#step3'), [() => r3.toggleMute()], 1600);
+})();
+
+/* ---------- Light / dark screenshots ---------- */
+(() => {
+  const stage = $('#shotStage'), thumb = $('#segThumb'), btns = $$('.seg button');
+  let manual = false;
+  const set = mode => {
+    stage.dataset.mode = mode;
+    btns.forEach(b => b.setAttribute('aria-selected', String(b.dataset.mode === mode)));
+    const b = btns.find(b => b.dataset.mode === mode);
+    thumb.style.width = `${b.offsetWidth}px`;
+    thumb.style.transform = `translateX(${b.offsetLeft - 4}px)`;
+  };
+  btns.forEach(b => b.addEventListener('click', () => { manual = true; set(b.dataset.mode); }));
+  addEventListener('resize', () => set(stage.dataset.mode));
+  set('light');
+  watch(stage);
+  setInterval(() => { if (!manual && visible(stage) && !reduceMotion) set(stage.dataset.mode === 'light' ? 'dark' : 'light'); }, 3800);
+  if (!reduceMotion) {
+    stage.addEventListener('pointermove', e => {
+      const r = stage.getBoundingClientRect();
+      const x = (e.clientX - r.left) / r.width - 0.5, y = (e.clientY - r.top) / r.height - 0.5;
+      stage.style.transform = `perspective(1400px) rotateY(${x * 6}deg) rotateX(${-y * 6}deg)`;
+    });
+    stage.addEventListener('pointerleave', () => { stage.style.transform = ''; });
+  }
+})();
+
+/* ---------- Feature cards ---------- */
+(() => {
+  const boost = new Row('web', { vol: 1, spacer: false });
+  $('#fBoost').append(boost.el);
+  autoplay($('#fBoost'), [() => boost.setVolume(2, true), () => boost.setVolume(1.4, true), () => boost.setVolume(1, true), () => boost.setVolume(0.6, true)], 1500);
+
+  const mute = new Row('call', { vol: 0.6, spacer: false });
+  $('#fMute').append(mute.el);
+  autoplay($('#fMute'), [() => mute.toggleMute()], 1500);
+
+  const play = new Row('music', { vol: 0.8, transport: true });
+  $('#fPlay').append(play.el);
+  const tip = $('#npTip');
+  play.el.addEventListener('playing', () => { tip.innerHTML = play.playing ? 'Night Drive <small>— Lo-Fi Radio</small>' : 'Paused <small>— Night Drive</small>'; });
+  autoplay($('#fPlay'), [() => play.setPlaying(!play.playing)], 2000);
+
+  // Smooth fade: the level glides between loud and silent
+  let lvl = 1, lvlT = 1;
+  new Meter($('#fSmooth'), () => lvl, 22, 1.3);
+  const smooth = $('#fSmooth');
+  watch(smooth);
+  setInterval(() => { if (visible(smooth)) lvlT = lvlT > 0.5 ? 0.08 : 1; }, 1800);
+  tickers.add((t, dt) => { lvl += (lvlT - lvl) * (1 - Math.exp(-dt / 0.12)); });
+
+  const DEV = [
+    ['MacBook Speakers', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/></svg>'],
+    ['AirPods', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/></svg>'],
+    ['Studio Display', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M12 16v4M8 20h8"/></svg>'],
+  ];
+  const dn = $('#devName'), di = $('#devIco');
+  let d = 0;
+  di.innerHTML = DEV[0][1];
+  watch(dn);
+  setInterval(() => {
+    if (!visible(dn) || reduceMotion) return;
+    d = (d + 1) % DEV.length;
+    dn.classList.add('swap');
+    setTimeout(() => { dn.textContent = DEV[d][0]; di.innerHTML = DEV[d][1]; dn.classList.remove('swap'); }, 250);
+  }, 2400);
+})();
+
+/* ---------- Install: distance the app travels to the folder ---------- */
+(() => {
+  const f = $('#finder'), a = $('#fApp'), b = $('#fApps');
+  const set = () => f.style.setProperty('--dx', b.offsetLeft - a.offsetLeft);
+  new ResizeObserver(set).observe(f); set();
+})();
+
+/* ---------- FAQ: animate open/close ---------- */
+$$('.faq details').forEach(d => {
+  const sum = $('summary', d), ans = $('.ans', d);
+  sum.addEventListener('click', e => {
+    if (reduceMotion) return;
+    e.preventDefault();
+    if (d.open) {
+      const a = ans.animate([{ height: `${ans.offsetHeight}px`, opacity: 1 }, { height: '0px', opacity: 0 }], { duration: 300, easing: 'cubic-bezier(.2,.8,.2,1)' });
+      a.onfinish = () => { d.open = false; };
+    } else {
+      d.open = true;
+      ans.animate([{ height: '0px', opacity: 0 }, { height: `${ans.offsetHeight}px`, opacity: 1 }], { duration: 380, easing: 'cubic-bezier(.2,.8,.2,1)' });
+    }
+  });
+});
+
+/* ---------- Latest release: point Download straight at the DMG ---------- */
+fetch('https://api.github.com/repos/lejuste/Levels/releases/latest', { headers: { Accept: 'application/vnd.github+json' } })
+  .then(r => r.ok ? r.json() : Promise.reject(r.status))
+  .then(rel => {
+    const dmg = (rel.assets || []).find(a => /\.dmg$/i.test(a.name));
+    const ver = (rel.tag_name || '').replace(/^v/, '');
+    if (ver) $$('[data-version]').forEach(el => { el.textContent = `Version ${ver}`; });
+    if (dmg) {
+      $$('[data-dl]').forEach(a => { a.href = dmg.browser_download_url; });
+      const mb = dmg.size ? ` · ${(dmg.size / 1048576).toFixed(1)} MB` : '';
+      $$('[data-dmgname]').forEach(el => { el.textContent = dmg.name; });
+      $$('.hero-meta [data-version]').forEach(el => { el.textContent += mb; });
+    }
+  })
+  .catch(() => { /* keep the Releases page link */ });
+})();
+</script>
+</body>
+</html>
