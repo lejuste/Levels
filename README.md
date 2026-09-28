@@ -13,6 +13,8 @@ Turn down a noisy video call without muting your music. Boost a quiet YouTube vi
 
 macOS only has one volume for everything. Levels adds a volume for each app.
 
+**[Visit the website →](https://lejuste.github.io/Levels/)** It has a live demo of the menu you can try in your browser, plus how it works and what it does with your audio.
+
 ## Features
 
 - **A slider for each app.** Only apps that are actually playing sound show up, so the list stays short. Quick notification blips are ignored.
@@ -60,3 +62,7 @@ Only to apps whose volume you've changed. Apps you never adjust aren't touched a
 
 **Can I pause a specific app, not just the one the play/pause key controls?**
 No. macOS only lets its own apps, like Control Center, pause a particular app. Levels can control whichever app your play/pause key controls.
+
+## Website
+
+The site at [lejuste.github.io/Levels](https://lejuste.github.io/Levels/) is served by GitHub Pages from the [`docs/`](docs/) folder. It's a single static page with no build step, and its Download button always points at the latest release.
